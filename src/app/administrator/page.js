@@ -7,11 +7,11 @@ import { Profile } from "@/components/auth/Profile"
 export default function AdministratorPage() {
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
-        <div className="container mx-auto max-w-6xl space-y-6">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-2 sm:p-4">
+        <div className="max-w-full sm:container mx-auto space-y-6">
           <Card>
-            <CardHeader className="flex items-center justify-between">
-              <div>
+            <CardHeader className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="w-full sm:w-auto">
                 <CardTitle className="flex items-center gap-2 text-2xl">
                   <Shield className="size-6 text-primary" />
                   Administrator Panel

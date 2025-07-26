@@ -10,8 +10,8 @@ export function SignInButton() {
 
   if (session) {
     return (
-      <Link href="/administrator">
-        <Button variant="outline" size="sm" className="gap-2">
+      <Link href="/administrator" className="w-full sm:w-auto">
+        <Button variant="outline" size="lg" className="gap-2 w-full sm:w-auto text-base py-3 rounded-lg">
           <LogIn className="size-4" />
           Administrator
         </Button>
@@ -23,8 +23,8 @@ export function SignInButton() {
     <Button 
       onClick={() => signIn("google", { callbackUrl: "/administrator" })}
       variant="outline"
-      size="sm"
-      className="gap-2"
+      size="lg"
+      className="gap-2 w-full sm:w-auto text-base py-3 rounded-lg"
     >
       <LogIn className="size-4" />
       Administrator

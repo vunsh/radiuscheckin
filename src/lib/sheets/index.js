@@ -157,3 +157,110 @@ export const findQRCode = async (qrData) => {
     throw error;
   }
 };
+
+export const getUniqueCenters = async () => {
+  try {
+    const studentData = await getStudentData();
+
+    if (!studentData || studentData.length === 0) {
+      return [];
+    }
+
+
+
+    const centerColumnIndex = 49;
+    const headers = studentData[0] || [];
+
+    if (
+      !headers[centerColumnIndex] ||
+      headers[centerColumnIndex].trim().toLowerCase() !== "center"
+    ) {
+      const fallbackIndex = headers.findIndex(
+        h => typeof h === "string" && h.trim().toLowerCase() === "center"
+      );
+      if (fallbackIndex === -1) {
+        throw new Error('Column AX does not contain the "Center" header and no "Center" column found');
+      }
+      return Array.from(
+        new Set(
+          studentData
+            .slice(1)
+            .map(row => row[fallbackIndex])
+            .filter(
+              v =>
+                typeof v === "string" &&
+                v.trim() !== "" &&
+                v.trim().toLowerCase() !== "center" &&
+                v.trim().toLowerCase() !== "center id"
+            )
+        )
+      ).sort();
+    }
+
+    const centers = new Set();
+    for (let i = 1; i < studentData.length; i++) {
+      const row = studentData[i];
+      if (!row || row.length <= centerColumnIndex) continue;
+      const centerValue = row[centerColumnIndex];
+      if (
+        centerValue &&
+        typeof centerValue === "string" &&
+        centerValue.trim() !== "" &&
+        centerValue.trim().toLowerCase() !== "center" &&
+        centerValue.trim().toLowerCase() !== "center id"
+      ) {
+        centers.add(centerValue.trim());
+      }
+    }
+
+    return Array.from(centers).sort();
+  } catch (error) {
+    console.error('Error getting unique centers:', error);
+    throw error;
+  }
+};
+
+export const getStudentsByCenter = async (centerName) => {
+  try {
+    const studentData = await getStudentData();
+    
+    if (!studentData || studentData.length === 0) {
+      return [];
+    }
+
+    const headers = studentData[0] || [];
+    const firstNameIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "first name");
+    const lastNameIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "last name");
+    const studentIdIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "a");
+    const centerIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "center");
+    const lastAttendanceIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "last attendance date");
+    const qrCodeIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "qr code");
+
+    if (centerIndex === -1) {
+      throw new Error('Center column not found in student data');
+    }
+
+    const students = [];
+    for (let i = 1; i < studentData.length; i++) {
+      const row = studentData[i];
+      if (!row || row.length <= centerIndex) continue;
+
+      const studentCenter = row[centerIndex];
+      if (studentCenter && studentCenter.trim() === centerName.trim()) {
+        students.push({
+          firstName: firstNameIndex !== -1 ? (row[firstNameIndex] || '') : '',
+          lastName: lastNameIndex !== -1 ? (row[lastNameIndex] || '') : '',
+          studentId: studentIdIndex !== -1 ? (row[studentIdIndex] || '') : '',
+          center: studentCenter.trim(),
+          lastAttendance: lastAttendanceIndex !== -1 ? (row[lastAttendanceIndex] || '') : '',
+          qrCode: qrCodeIndex !== -1 ? (row[qrCodeIndex] || '') : ''
+        });
+      }
+    }
+
+    return students;
+  } catch (error) {
+    console.error('Error getting students by center:', error);
+    throw error;
+  }
+};

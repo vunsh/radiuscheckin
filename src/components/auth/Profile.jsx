@@ -19,7 +19,7 @@ export function Profile() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
+        <Button variant="ghost" size="lg" className="gap-2 w-full sm:w-auto text-base py-3 rounded-lg">
           <Avatar className="size-7">
             <AvatarImage src={session?.user?.image} alt={session?.user?.name} />
             <AvatarFallback>{session?.user?.name?.[0]}</AvatarFallback>
@@ -28,7 +28,7 @@ export function Profile() {
           <User className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="min-w-[180px] w-full sm:w-56">
         <DropdownMenuItem onClick={() => router.push("/")} className="flex items-center gap-2">
           <Home className="size-4" />
           Back to Home
