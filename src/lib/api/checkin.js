@@ -4,7 +4,7 @@ export class CheckInAPI {
     this.apiKey = process.env.NEXT_PUBLIC_API_KEY;
   }
 
-  async startCheckIn(studentId) {
+  async startCheckIn(studentId, qrCodeUrl = null) {
     try {
       console.log("[CheckInAPI] Starting check-in for studentId:", studentId);
       const response = await fetch(`${this.baseUrl}/api/check-in/run`, {
@@ -14,7 +14,8 @@ export class CheckInAPI {
         },
         body: JSON.stringify({
           apiKey: this.apiKey,
-          studentId: studentId
+          studentId: studentId,
+          qrCodeUrl: qrCodeUrl
         })
       });
 
@@ -30,6 +31,29 @@ export class CheckInAPI {
       return data.jobId;
     } catch (error) {
       console.error('Error starting check-in:', error);
+      throw error;
+    }
+  }
+
+  async fetchQRCodeImage(qrCodeUrl) {
+    try {
+      console.log("[CheckInAPI] Fetching QR code image for URL:", qrCodeUrl);
+      const response = await fetch('/api/qr-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ qrCodeUrl })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch QR code image: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.imageData;
+    } catch (error) {
+      console.error('Error fetching QR code image:', error);
       throw error;
     }
   }

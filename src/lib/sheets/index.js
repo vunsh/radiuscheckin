@@ -7,10 +7,14 @@ class GoogleSheetsClient {
         client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
         private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.readonly'
+      ],
     });
 
     this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+    this.drive = google.drive({ version: 'v3', auth: this.auth });
   }
 
   extractSpreadsheetId(url) {
@@ -85,6 +89,57 @@ class GoogleSheetsClient {
       });
     } catch (error) {
       console.error('Error clearing Google Sheets data:', error);
+      throw error;
+    }
+  }
+
+  extractGoogleDriveFileId(url) {
+    if (!url || typeof url !== 'string') return null;
+    
+    const patterns = [
+      /\/file\/d\/([a-zA-Z0-9-_]+)/,
+      /id=([a-zA-Z0-9-_]+)/,
+      /\/d\/([a-zA-Z0-9-_]+)$/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    
+    return null;
+  }
+
+  async getImageAsBase64(fileUrl) {
+    try {
+      const fileId = this.extractGoogleDriveFileId(fileUrl);
+      if (!fileId) {
+        throw new Error('Invalid Google Drive file URL');
+      }
+
+      const metadata = await this.drive.files.get({
+        fileId,
+        fields: 'mimeType,name'
+      });
+
+      const mimeType = metadata.data.mimeType;
+      if (!mimeType || !mimeType.startsWith('image/')) {
+        throw new Error('File is not an image');
+      }
+
+      const response = await this.drive.files.get({
+        fileId,
+        alt: 'media'
+      }, {
+        responseType: 'arraybuffer'
+      });
+
+      const buffer = Buffer.from(response.data);
+      const base64String = buffer.toString('base64');
+      
+      return `data:${mimeType};base64,${base64String}`;
+    } catch (error) {
+      console.error('Error fetching image from Google Drive:', error);
       throw error;
     }
   }

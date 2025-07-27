@@ -1,68 +1,93 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Users, QrCode, Download, RefreshCcw, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
+import { Download, AlertCircle, Database, Upload, Users, ChevronUp, ChevronDown } from "lucide-react"
+import { QRUploadTab } from "@/components/admin/QRUploadTab"
 
 export function DataDisplay() {
   const [studentData, setStudentData] = useState([])
-  const [qrData, setQrData] = useState([])
-  const [loading, setLoading] = useState({ students: false, qr: false })
-  const [error, setError] = useState({ students: null, qr: null })
-  const [expandedMobileRows, setExpandedMobileRows] = useState(new Set())
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" })
 
   useEffect(() => {
     fetchStudentData()
-    fetchQRData()
   }, [])
 
   const fetchStudentData = async () => {
-    setLoading(prev => ({ ...prev, students: true }))
-    setError(prev => ({ ...prev, students: null }))
+    setLoading(true)
+    setError(null)
     
     try {
       const response = await fetch('/api/admin/students')
       if (!response.ok) throw new Error('Failed to fetch student data')
       
       const data = await response.json()
-      setStudentData(data.students || [])
+      const headers = data.students[0] || []
+      const rows = data.students.slice(1) || []
+
+      // Extract relevant columns
+      const studentIdIndex = headers.findIndex(h => h.toLowerCase().trim() === "student id")
+      const firstNameIndex = headers.findIndex(h => h.toLowerCase().trim() === "first name")
+      const lastNameIndex = headers.findIndex(h => h.toLowerCase().trim() === "last name")
+      const gradeIndex = headers.findIndex(h => h.toLowerCase().trim() === "grade")
+      const centerIndex = headers.findIndex(h => h.toLowerCase().trim() === "center")
+      const qrCodeIndex = headers.findIndex(h => h.toLowerCase().trim() === "qr code")
+
+      const extractedData = rows.map(row => ({
+        studentId: row[studentIdIndex] || "-",
+        studentName: `${row[firstNameIndex] || ""} ${row[lastNameIndex] || ""}`.trim() || "-",
+        grade: row[gradeIndex] || "-",
+        center: row[centerIndex] || "-",
+        qrCode: row[qrCodeIndex] || "-"
+      }))
+
+      // Group data by center
+      const groupedData = extractedData.sort((a, b) => a.center.localeCompare(b.center))
+      setStudentData(groupedData)
     } catch (err) {
-      setError(prev => ({ ...prev, students: err.message }))
+      setError(err.message)
       setStudentData([])
     } finally {
-      setLoading(prev => ({ ...prev, students: false }))
+      setLoading(false)
     }
   }
 
-  const fetchQRData = async () => {
-    setLoading(prev => ({ ...prev, qr: true }))
-    setError(prev => ({ ...prev, qr: null }))
-    
-    try {
-      const response = await fetch('/api/admin/qrcodes')
-      if (!response.ok) throw new Error('Failed to fetch QR code data')
-      
-      const data = await response.json()
-      setQrData(data.qrCodes || [])
-    } catch (err) {
-      setError(prev => ({ ...prev, qr: err.message }))
-      setQrData([])
-    } finally {
-      setLoading(prev => ({ ...prev, qr: false }))
+  const handleSort = (key) => {
+    let direction = "asc"
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc"
     }
+    setSortConfig({ key, direction })
+
+    const sortedData = [...studentData].sort((a, b) => {
+      if (a[key] < b[key]) return direction === "asc" ? -1 : 1
+      if (a[key] > b[key]) return direction === "asc" ? 1 : -1
+      return 0
+    })
+    setStudentData(sortedData)
   }
 
   const downloadCSV = (data, filename) => {
     if (!data || data.length === 0) return
     
-    const csv = data.map(row => row.join(',')).join('\n')
+    const csvHeaders = ["Student Id", "Student Name", "Grade", "Center", "QR Code"]
+    const csvRows = data.map(row => [
+      row.studentId,
+      row.studentName,
+      row.grade,
+      row.center,
+      row.qrCode
+    ])
+    const csv = [csvHeaders, ...csvRows].map(row => row.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -72,255 +97,124 @@ export function DataDisplay() {
     window.URL.revokeObjectURL(url)
   }
 
-  const toggleMobileRow = (index) => {
-    const newExpanded = new Set(expandedMobileRows)
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index)
-    } else {
-      newExpanded.add(index)
+  const renderSortIcon = (key) => {
+    if (sortConfig.key === key) {
+      return sortConfig.direction === "asc" ? <ChevronUp className="size-4 ml-1 inline" /> : <ChevronDown className="size-4 ml-1 inline" />
     }
-    setExpandedMobileRows(newExpanded)
-  }
-
-  const renderMobileCard = (row, index, isHeader = false) => {
-    if (isHeader) return null
-
-    return (
-      <Card key={index} className="mb-3">
-        <CardContent className="p-4">
-          <div className="space-y-2">
-            {row.map((cell, cellIndex) => (
-              <div key={cellIndex} className="flex justify-between">
-                <span className="font-medium text-sm">Column {cellIndex + 1}:</span>
-                <span className="text-sm truncate ml-2">{cell || '-'}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  const renderDesktopTable = (data, isQRData = false) => {
-    if (data.length === 0) return null
-
-    const headers = isQRData && data.length > 0 ? data[0] : null
-    const rows = isQRData && headers ? data.slice(1) : data
-    const maxColumns = Math.max(...data.map(row => row.length))
-
-    return (
-      <ScrollArea className="h-96 border rounded-md">
-        <Table>
-          {headers && (
-            <TableHeader>
-              <TableRow>
-                {headers.map((header, index) => (
-                  <TableHead key={index}>{header}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-          )}
-          <TableBody>
-            {rows.map((row, index) => (
-              <TableRow key={index}>
-                {Array.from({ length: maxColumns }, (_, cellIndex) => (
-                  <TableCell key={cellIndex} className="max-w-48 truncate whitespace-nowrap">
-                    {row[cellIndex] || '-'}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </ScrollArea>
-    )
+    return null
   }
 
   return (
-    <Tabs defaultValue="students" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="students" className="flex items-center gap-2">
-          <Users className="size-4" />
-          <span className="hidden sm:inline">Student Data</span>
-          <span className="sm:hidden">Students</span>
-        </TabsTrigger>
-        <TabsTrigger value="qrcodes" className="flex items-center gap-2">
-          <QrCode className="size-4" />
-          <span className="hidden sm:inline">QR Codes</span>
-          <span className="sm:hidden">QR Codes</span>
-        </TabsTrigger>
-      </TabsList>
+    <div className="space-y-6">
+      <Tabs defaultValue="upload" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="upload" className="flex items-center gap-2">
+            <Upload className="size-4" />
+            Upload QR Code
+          </TabsTrigger>
+          <TabsTrigger value="students" className="flex items-center gap-2">
+            <Users className="size-4" />
+            Student Data
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="students">
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+        <TabsContent value="upload">
+          <QRUploadTab />
+        </TabsContent>
+
+        <TabsContent value="students" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="size-5" />
-                  Student Database
+                  <Database className="size-5" />
+                  Student Data
                 </CardTitle>
                 <CardDescription>
                   View and manage student information from Google Sheets
                 </CardDescription>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex gap-2">
                 <Button
-                  onClick={fetchStudentData}
-                  disabled={loading.students}
                   variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                >
-                  <RefreshCcw className="size-4" />
-                  {loading.students ? 'Loading...' : 'Refresh'}
-                </Button>
-                <Button
                   onClick={() => downloadCSV(studentData, 'student-data.csv')}
-                  disabled={studentData.length === 0}
-                  size="sm"
-                  className="w-full sm:w-auto"
+                  disabled={!studentData.length}
                 >
-                  <Download className="size-4" />
+                  <Download className="size-4 mr-2" />
                   Export CSV
                 </Button>
+                <Button onClick={fetchStudentData} disabled={loading}>
+                  Refresh
+                </Button>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {error.students && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="size-4" />
-                <AlertDescription>{error.students}</AlertDescription>
-              </Alert>
-            )}
-            
-            {loading.students ? (
-              <div className="space-y-2">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : studentData.length > 0 ? (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <Badge variant="secondary">
-                    {studentData.length} records found
-                  </Badge>
-                </div>
-                
-                <div className="hidden md:block overflow-x-auto">
-                  {renderDesktopTable(studentData)}
-                </div>
-                
-                <div className="md:hidden">
-                  <ScrollArea className="h-96">
-                    {studentData.map((row, index) => renderMobileCard(row, index))}
-                  </ScrollArea>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                <Users className="size-12 mx-auto mb-4 opacity-50" />
-                <p>No student data available.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="size-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
 
-      <TabsContent value="qrcodes">
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <QrCode className="size-5" />
-                  QR Code Management
-                </CardTitle>
-                <CardDescription>
-                  View and manage QR codes for check-in system
-                </CardDescription>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  onClick={fetchQRData}
-                  disabled={loading.qr}
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                >
-                  <RefreshCcw className="size-4" />
-                  {loading.qr ? 'Loading...' : 'Refresh'}
-                </Button>
-                <Button
-                  onClick={() => downloadCSV(qrData, 'qr-codes.csv')}
-                  disabled={qrData.length === 0}
-                  size="sm"
-                  className="w-full sm:w-auto"
-                >
-                  <Download className="size-4" />
-                  Export CSV
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {error.qr && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="size-4" />
-                <AlertDescription>{error.qr}</AlertDescription>
-              </Alert>
-            )}
-            
-            {loading.qr ? (
-              <div className="space-y-2">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : qrData.length > 0 ? (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <Badge variant="secondary">
-                    {qrData.length - 1} QR codes found 
-                  </Badge>
+              {loading ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
                 </div>
-                
-                <div className="hidden md:block overflow-x-auto">
-                  {renderDesktopTable(qrData, true)}
+              ) : studentData.length > 0 ? (
+                <ScrollArea className="h-[60vh] w-full">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead onClick={() => handleSort("studentId")} className="cursor-pointer">
+                          Student Id {renderSortIcon("studentId")}
+                        </TableHead>
+                        <TableHead onClick={() => handleSort("studentName")} className="cursor-pointer">
+                          Student Name {renderSortIcon("studentName")}
+                        </TableHead>
+                        <TableHead onClick={() => handleSort("grade")} className="cursor-pointer">
+                          Grade {renderSortIcon("grade")}
+                        </TableHead>
+                        <TableHead onClick={() => handleSort("center")} className="cursor-pointer">
+                          Center {renderSortIcon("center")}
+                        </TableHead>
+                        <TableHead onClick={() => handleSort("qrCode")} className="cursor-pointer">
+                          QR Code {renderSortIcon("qrCode")}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {studentData.map((row, index) => (
+                        <TableRow key={index} className={row.qrCode === "-" ? "bg-red-50" : ""}>
+                          <TableCell>{row.studentId}</TableCell>
+                          <TableCell>{row.studentName}</TableCell>
+                          <TableCell>{row.grade}</TableCell>
+                          <TableCell>{row.center}</TableCell>
+                          <TableCell>
+                            {row.qrCode !== "-" ? (
+                              <a href={row.qrCode} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                View QR Code
+                              </a>
+                            ) : (
+                              "-"
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Database className="size-12 mx-auto mb-4 opacity-50" />
+                  <p>No student data available</p>
                 </div>
-                
-                <div className="md:hidden">
-                  <ScrollArea className="h-96">
-                    {qrData.slice(1).map((row, index) => ( 
-                      <Card key={index} className="mb-3">
-                        <CardContent className="p-4">
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="font-medium text-sm">{qrData[0]?.[0] || 'QR Code'}:</span>
-                              <span className="text-sm font-mono truncate ml-2">{row[0] || '-'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-sm">{qrData[0]?.[1] || 'Description'}:</span>
-                              <span className="text-sm truncate ml-2">{row[1] || '-'}</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </ScrollArea>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                <QrCode className="size-12 mx-auto mb-4 opacity-50" />
-                <p>No QR code data available.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }

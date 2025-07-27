@@ -59,7 +59,7 @@ export const ProgressToast = ({
               <div className="font-semibold text-sm truncate">{title}</div>
             </div>
             {description && (
-              <div className="text-xs text-muted-foreground mt-1 text-black">{description}</div>
+              <div className="text-xs text-foreground mt-1">{description}</div>
             )}
           </div>
           <Button
