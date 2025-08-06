@@ -11,12 +11,14 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import { Download, AlertCircle, Database, Upload, Users, ChevronUp, ChevronDown } from "lucide-react"
 import { QRUploadTab } from "@/components/admin/QRUploadTab"
+import { MassQRUploadTab } from "@/components/admin/MassQRUploadTab"
 
 export function DataDisplay() {
   const [studentData, setStudentData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" })
+  const [currentView, setCurrentView] = useState("upload")
 
   useEffect(() => {
     fetchStudentData()
@@ -106,115 +108,119 @@ export function DataDisplay() {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="upload" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="upload" className="flex items-center gap-2">
-            <Upload className="size-4" />
-            Upload QR Code
-          </TabsTrigger>
-          <TabsTrigger value="students" className="flex items-center gap-2">
-            <Users className="size-4" />
-            Student Data
-          </TabsTrigger>
-        </TabsList>
+      {currentView === "mass-upload" ? (
+        <MassQRUploadTab onBack={() => setCurrentView("upload")} />
+      ) : (
+        <Tabs value={currentView} onValueChange={setCurrentView} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="upload" className="flex items-center gap-2">
+              <Upload className="size-4" />
+              Upload QR Code
+            </TabsTrigger>
+            <TabsTrigger value="students" className="flex items-center gap-2">
+              <Users className="size-4" />
+              Student Data
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="upload">
-          <QRUploadTab />
-        </TabsContent>
+          <TabsContent value="upload">
+            <QRUploadTab onNavigateToMassUpload={() => setCurrentView("mass-upload")} />
+          </TabsContent>
 
-        <TabsContent value="students" className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Database className="size-5" />
-                  Student Data
-                </CardTitle>
-                <CardDescription>
-                  View and manage student information from Google Sheets
-                </CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => downloadCSV(studentData, 'student-data.csv')}
-                  disabled={!studentData.length}
-                >
-                  <Download className="size-4 mr-2" />
-                  Export CSV
-                </Button>
-                <Button onClick={fetchStudentData} disabled={loading}>
-                  Refresh
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {error && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertCircle className="size-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {loading ? (
-                <div className="space-y-2">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
+          <TabsContent value="students" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="size-5" />
+                    Student Data
+                  </CardTitle>
+                  <CardDescription>
+                    View and manage student information from Google Sheets
+                  </CardDescription>
                 </div>
-              ) : studentData.length > 0 ? (
-                <ScrollArea className="h-[60vh] w-full">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead onClick={() => handleSort("studentId")} className="cursor-pointer">
-                          Student Id {renderSortIcon("studentId")}
-                        </TableHead>
-                        <TableHead onClick={() => handleSort("studentName")} className="cursor-pointer">
-                          Student Name {renderSortIcon("studentName")}
-                        </TableHead>
-                        <TableHead onClick={() => handleSort("grade")} className="cursor-pointer">
-                          Grade {renderSortIcon("grade")}
-                        </TableHead>
-                        <TableHead onClick={() => handleSort("center")} className="cursor-pointer">
-                          Center {renderSortIcon("center")}
-                        </TableHead>
-                        <TableHead onClick={() => handleSort("qrCode")} className="cursor-pointer">
-                          QR Code {renderSortIcon("qrCode")}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {studentData.map((row, index) => (
-                        <TableRow key={index} className={row.qrCode === "-" ? "bg-red-50" : ""}>
-                          <TableCell>{row.studentId}</TableCell>
-                          <TableCell>{row.studentName}</TableCell>
-                          <TableCell>{row.grade}</TableCell>
-                          <TableCell>{row.center}</TableCell>
-                          <TableCell>
-                            {row.qrCode !== "-" ? (
-                              <a href={row.qrCode} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                                View QR Code
-                              </a>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => downloadCSV(studentData, 'student-data.csv')}
+                    disabled={!studentData.length}
+                  >
+                    <Download className="size-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button onClick={fetchStudentData} disabled={loading}>
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {error && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="size-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {loading ? (
+                  <div className="space-y-2">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : studentData.length > 0 ? (
+                  <ScrollArea className="h-[60vh] w-full">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead onClick={() => handleSort("studentId")} className="cursor-pointer">
+                            Student Id {renderSortIcon("studentId")}
+                          </TableHead>
+                          <TableHead onClick={() => handleSort("studentName")} className="cursor-pointer">
+                            Student Name {renderSortIcon("studentName")}
+                          </TableHead>
+                          <TableHead onClick={() => handleSort("grade")} className="cursor-pointer">
+                            Grade {renderSortIcon("grade")}
+                          </TableHead>
+                          <TableHead onClick={() => handleSort("center")} className="cursor-pointer">
+                            Center {renderSortIcon("center")}
+                          </TableHead>
+                          <TableHead onClick={() => handleSort("qrCode")} className="cursor-pointer">
+                            QR Code {renderSortIcon("qrCode")}
+                          </TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Database className="size-12 mx-auto mb-4 opacity-50" />
-                  <p>No student data available</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                      </TableHeader>
+                      <TableBody>
+                        {studentData.map((row, index) => (
+                          <TableRow key={index} className={row.qrCode === "-" ? "bg-red-50" : ""}>
+                            <TableCell>{row.studentId}</TableCell>
+                            <TableCell>{row.studentName}</TableCell>
+                            <TableCell>{row.grade}</TableCell>
+                            <TableCell>{row.center}</TableCell>
+                            <TableCell>
+                              {row.qrCode !== "-" ? (
+                                <a href={row.qrCode} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                  View QR Code
+                                </a>
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Database className="size-12 mx-auto mb-4 opacity-50" />
+                    <p>No student data available</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   )
 }

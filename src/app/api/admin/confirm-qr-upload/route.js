@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
 import { isApprovedUser } from "@/lib/auth"
-import { getStudentData, updateStudentData } from "@/lib/sheets"
+import { getStudentData, getQRCodes, updateQRCodes } from "@/lib/sheets"
 import { driveClient } from "@/lib/drive"
 
 export async function POST(request) {
@@ -41,14 +41,49 @@ export async function POST(request) {
       )
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const mimetype = file.type || "image/png" // keep as pngs
-    const fileName = file.name || `${studentName.replace(/\s+/g, '_')}_QR_${Date.now()}.png`
-    const folderId = process.env.QRCODEFOLDER
-    const studentData = await getStudentData()
-    const studentMatch = studentData[rowIndex]
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg']
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json(
+        { error: "Only PDF and image files are allowed" },
+        { status: 400 }
+      )
+    }
 
-    // the google drive client expects a body, mimetype, and filename for the part that is uploaded
+    const studentData = await getStudentData()
+    if (!studentData || studentData.length <= rowIndex) {
+      return NextResponse.json(
+        { error: "Invalid student data or row index" },
+        { status: 400 }
+      )
+    }
+
+    const headers = studentData[0] || []
+    const studentIdIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "student id")
+    
+    if (studentIdIndex === -1) {
+      return NextResponse.json(
+        { error: "Student ID column not found in student data" },
+        { status: 500 }
+      )
+    }
+
+    const studentRow = studentData[rowIndex]
+    const studentId = studentRow[studentIdIndex]
+    
+    if (!studentId) {
+      return NextResponse.json(
+        { error: "No student ID found for this student" },
+        { status: 400 }
+      )
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const mimetype = file.type
+    const extension = mimetype === 'application/pdf' ? '.pdf' : 
+                     mimetype === 'image/png' ? '.png' : '.jpg'
+    const fileName = file.name || `${studentName.replace(/\s+/g, '_')}_QR_${Date.now()}${extension}`
+    const folderId = process.env.QRCODEFOLDER
+
     const part = {
       body: buffer,
       mimetype,
@@ -60,25 +95,38 @@ export async function POST(request) {
         part, 
         folderId, 
         {
-          studentId: studentMatch.studentId,
-          fullName: studentMatch.fullName,
+          studentId: studentId,
+          fullName: studentName,
         }, 
         session.accessToken,
         session.refreshToken
       );
 
-      const headers = studentData[0] || []
-      const qrCodeIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "qr code")
+      const qrCodeData = await getQRCodes()
+      let updatedQRData = [...qrCodeData]
       
-      if (qrCodeIndex !== -1) {
-        studentData[rowIndex][qrCodeIndex] = driveUrl
-        await updateStudentData(studentData)
+      let existingRowIndex = -1
+      for (let i = 0; i < qrCodeData.length; i++) {
+        if (qrCodeData[i][0] === studentId) {
+          existingRowIndex = i
+          break
+        }
       }
+
+      if (existingRowIndex !== -1) {
+        updatedQRData[existingRowIndex][1] = driveUrl
+      } else {
+        updatedQRData.push([studentId, driveUrl])
+      }
+
+      await updateQRCodes(updatedQRData)
 
       return NextResponse.json({
         success: true,
         driveUrl,
-        message: `QR code image successfully uploaded and linked to ${studentName}`
+        studentId,
+        action: existingRowIndex !== -1 ? 'updated' : 'added',
+        message: `QR code ${mimetype === 'application/pdf' ? 'PDF' : 'image'} successfully uploaded and ${existingRowIndex !== -1 ? 'updated' : 'linked'} for ${studentName} (ID: ${studentId})`
       })
     } catch (driveError) {
       console.error("Drive upload error:", driveError);

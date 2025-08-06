@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
 import { isApprovedUser } from "@/lib/auth"
-import { getStudentData, updateStudentData } from "@/lib/sheets"
+import { getStudentData, getQRCodes } from "@/lib/sheets"
 import { driveClient } from "@/lib/drive"
 import { parseQRCodePDF } from "@/lib/pdf/parser"
 
@@ -75,10 +75,14 @@ export async function POST(request) {
       const fullName = `${firstName} ${lastName}`.trim()
       
       if (fullName.toLowerCase() === pdfData.studentName.toLowerCase()) {
+        const studentIdIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "student id")
+        const studentId = studentIdIndex !== -1 ? row[studentIdIndex] : ''
+        
         matchedStudent = {
           firstName,
           lastName,
           fullName,
+          studentId,
           currentQRCode: row[qrCodeIndex] || '',
           rowIndex: i
         }
@@ -94,11 +98,15 @@ export async function POST(request) {
       )
     }
 
+    const qrCodeData = await getQRCodes()
+    const existingQREntry = qrCodeData.find(row => row[0] === matchedStudent.studentId)
+
     return NextResponse.json({
       success: true,
       studentInfo: matchedStudent,
       pdfData,
-      hasExistingQR: !!matchedStudent.currentQRCode
+      hasExistingQR: !!existingQREntry,
+      existingQRUrl: existingQREntry ? existingQREntry[1] : null
     })
 
   } catch (error) {

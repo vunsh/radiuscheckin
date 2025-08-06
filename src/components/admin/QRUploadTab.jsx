@@ -1,110 +1,27 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState } from "react"
 import { useSession, signIn } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Upload, FileText, User, AlertCircle, CheckCircle2, Loader2, Image as ImageIcon } from "lucide-react"
+import { Upload, FileText, User, AlertCircle, CheckCircle2, Loader2, FileStack } from "lucide-react"
 import { toast } from "sonner"
-import * as pdfjsLib from 'pdfjs-dist'
 
-// pdfjs-dist worker that handles setting up the image
-if (typeof window !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
-
-
- }
-
-export function QRUploadTab() {
+export function QRUploadTab({ onNavigateToMassUpload }) {
   const { data: session } = useSession()
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [studentMatch, setStudentMatch] = useState(null)
   const [dragActive, setDragActive] = useState(false)
-  const [pdfCanvas, setPdfCanvas] = useState(null)
-  const [imageBlob, setImageBlob] = useState(null)
-  const [renderingPdf, setRenderingPdf] = useState(false)
-  const canvasRef = useRef(null)
-  const [shouldRenderPdf, setShouldRenderPdf] = useState(false)
-  const [pendingFile, setPendingFile] = useState(null)
-
-  const [imageDataUrl, setImageDataUrl] = useState(null)
-
-  useEffect(() => {
-    if (shouldRenderPdf && pendingFile && canvasRef.current) {
-      renderPdfToCanvas(pendingFile)
-      setShouldRenderPdf(false)
-      setPendingFile(null)
-    }
-  }, [shouldRenderPdf, pendingFile, canvasRef.current])
-
-  const renderPdfToCanvas = async (pdfFile) => {
-    setRenderingPdf(true);
-    try {
-      const arrayBuffer = await pdfFile.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-
-      const scale = 2.0;
-      const viewport = page.getViewport({ scale });
-
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        throw new Error("Canvas ref not available");
-      }
-
-      const context = canvas.getContext("2d");
-      if (!context) {
-        throw new Error("Failed to get canvas context");
-      }
-
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
-
-      setPdfCanvas(canvas);
-
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          throw new Error("❌ Failed to convert canvas to image blob");
-        }
-        setImageBlob(blob);
-
-        // Also set the preview data URL
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setImageDataUrl(reader.result);
-        };
-        reader.readAsDataURL(blob);
-      }, "image/png", 0.95);
-
-    } catch (err) {
-      console.error("Error rendering PDF:", err);
-      toast.error("Failed to render PDF preview");
-      throw err;
-    } finally {
-      setRenderingPdf(false);
-    }
-  };
-
 
   const handleFileSelect = (selectedFile) => {
     if (selectedFile && selectedFile.type === 'application/pdf') {
       setFile(selectedFile)
       setStudentMatch(null)
-      setPendingFile(selectedFile)
-      setShouldRenderPdf(true)
     } else {
       toast.error("Please select a PDF file")
     }
@@ -161,7 +78,7 @@ export function QRUploadTab() {
   }
 
   const handleConfirm = async () => {
-    if (!imageBlob || !studentMatch) return
+    if (!file || !studentMatch) return
 
     if (!session?.accessToken || session?.error === "RefreshAccessTokenError") {
       toast.error("Authentication expired", {
@@ -173,12 +90,12 @@ export function QRUploadTab() {
     setConfirming(true)
     try {
       const safeName = studentMatch.studentInfo.fullName.replace(/[^a-zA-Z0-9-_]/g, "_")
-      const filename = `${studentMatch.studentInfo.studentId || 'student'}_${safeName}_QR_${Date.now()}.png`
+      const filename = `${studentMatch.studentInfo.studentId || 'student'}_${safeName}_QR_${Date.now()}.pdf`
       
-      const imageFile = new File([imageBlob], filename, { type: 'image/png' })
-      
+      const pdfFile = new File([file], filename, { type: 'application/pdf' })
+
       const formData = new FormData()
-      formData.append('file', imageFile)
+      formData.append('file', pdfFile)
       formData.append('studentName', studentMatch.studentInfo.fullName)
       formData.append('rowIndex', studentMatch.studentInfo.rowIndex.toString())
 
@@ -208,9 +125,6 @@ export function QRUploadTab() {
       // Reset form
       setFile(null)
       setStudentMatch(null)
-      setPdfCanvas(null)
-      setImageBlob(null)
-      setImageDataUrl(null)
     } catch (error) {
       console.error('Confirmation error:', error)
       toast.error(error.message || "Failed to confirm QR code upload")
@@ -222,13 +136,33 @@ export function QRUploadTab() {
   const resetForm = () => {
     setFile(null)
     setStudentMatch(null)
-    setPdfCanvas(null)
-    setImageBlob(null)
-    setImageDataUrl(null)
   }
 
   return (
     <div className="space-y-6">
+      {/* Mass Upload Button */}
+      <Card className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+            <FileStack className="size-5" />
+            Bulk QR Code Processing
+          </CardTitle>
+          <CardDescription className="text-blue-600 dark:text-blue-400">
+            Upload a large PDF containing multiple QR codes for batch processing
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            onClick={onNavigateToMassUpload}
+            className="w-full"
+            variant="outline"
+          >
+            <FileStack className="size-4 mr-2" />
+            Go to Mass Upload
+          </Button>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -236,7 +170,7 @@ export function QRUploadTab() {
             Upload QR Code PDF
           </CardTitle>
           <CardDescription>
-            Upload a PDF containing a student's QR code. The system will convert it to an image and link it to their profile.
+            Upload a PDF containing a student's QR code. The PDF will be stored directly and converted to an image when displayed.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -270,7 +204,7 @@ export function QRUploadTab() {
                     or <span className="underline text-primary font-medium">click to select</span>
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Only PDF files are accepted - will be converted to image
+                    Only PDF files are accepted - will be stored as PDF and converted to image when displayed
                   </p>
                 </div>
                 <Input
@@ -289,37 +223,15 @@ export function QRUploadTab() {
                     <FileText className="size-4" />
                     <AlertDescription>
                       <strong>Selected file:</strong> {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                      {renderingPdf && <span className="ml-2 text-amber-600">Converting to image...</span>}
                     </AlertDescription>
                   </Alert>
-                  
-                  {renderingPdf && (
-                    <div className="flex items-center justify-center p-8">
-                      <Loader2 className="size-8 animate-spin text-primary" />
-                      <span className="ml-2">Rendering PDF...</span>
-                    </div>
-                  )}
-                  {/* Always render the canvas so ref is available for PDF rendering */}
-                  <div className="border rounded-lg overflow-hidden bg-white">
-                    <div className="p-2 bg-muted text-sm font-medium flex items-center gap-2">
-                      <ImageIcon className="size-4" />
-                      PDF Preview (will be uploaded as image)
-                    </div>
-                    <div className="p-4 flex justify-center">
-                      <canvas
-                        ref={canvasRef}
-                        className="max-w-full max-h-96 border rounded shadow-sm"
-                        style={{ objectFit: 'contain' }}
-                      />
-                    </div>
-                  </div>
                 </>
               )}
 
               <div className="flex gap-2">
                 <Button 
                   onClick={handleUpload} 
-                  disabled={!file || uploading || renderingPdf}
+                  disabled={!file || uploading}
                   className="flex-1"
                 >
                   {uploading ? (
@@ -375,13 +287,21 @@ export function QRUploadTab() {
                     <Alert variant="destructive">
                       <AlertCircle className="size-4" />
                       <AlertDescription>
-                        <strong>Warning:</strong> This student already has a QR code linked. Proceeding will override their current QR code.
+                        <strong>Warning:</strong> This student already has a QR code in the system. Proceeding will replace their current QR code.
+                        {studentMatch.existingQRUrl && (
+                          <>
+                            <br />
+                            <a href={studentMatch.existingQRUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                              View current QR code
+                            </a>
+                          </>
+                        )}
                       </AlertDescription>
                     </Alert>
                   )}
 
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Current QR Code Status</label>
+                    <label className="text-sm font-medium text-muted-foreground">QR Code Status</label>
                     <div className="mt-1">
                       <Badge variant={studentMatch.hasExistingQR ? "destructive" : "secondary"}>
                         {studentMatch.hasExistingQR ? "Has QR Code (will be replaced)" : "No QR Code"}
@@ -391,20 +311,23 @@ export function QRUploadTab() {
                 </CardContent>
               </Card>
 
-              {/* Show the actual image that will be uploaded */}
-              {imageDataUrl && (
+              {/* Show the PDF file info */}
+              {file && (
                 <div className="border rounded-lg overflow-hidden bg-white">
                   <div className="p-2 bg-muted text-sm font-medium flex items-center gap-2">
-                    <ImageIcon className="size-4" />
-                    QR Code Image (ready for upload)
+                    <FileText className="size-4" />
+                    PDF File (ready for upload)
                   </div>
-                  <div className="p-4 flex justify-center">
-                    <img
-                      src={imageDataUrl}
-                      alt="QR Code Preview"
-                      className="max-w-full max-h-96 border rounded shadow-sm"
-                      style={{ objectFit: 'contain' }}
-                    />
+                  <div className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{file.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB • PDF Document
+                        </p>
+                      </div>
+                      <FileText className="size-8 text-muted-foreground" />
+                    </div>
                   </div>
                 </div>
               )}
@@ -412,19 +335,19 @@ export function QRUploadTab() {
               <div className="flex gap-2">
                 <Button 
                   onClick={handleConfirm} 
-                  disabled={confirming || !imageBlob}
+                  disabled={confirming || !file}
                   className="flex-1"
                   variant={studentMatch.hasExistingQR ? "destructive" : "default"}
                 >
                   {confirming ? (
                     <>
                       <Loader2 className="size-4 mr-2 animate-spin" />
-                      Uploading Image...
+                      Uploading PDF...
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="size-4 mr-2" />
-                      {studentMatch.hasExistingQR ? "Replace QR Code" : "Upload QR Image"}
+                      {studentMatch.hasExistingQR ? "Replace QR Code" : "Upload QR PDF"}
                     </>
                   )}
                 </Button>

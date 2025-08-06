@@ -44,14 +44,16 @@ export async function GET(request) {
 
       const studentCenter = row[centerIndex]
       if (studentCenter && studentCenter.trim() === center.trim()) {
-        students.push({
+        const studentRecord = {
           firstName: firstNameIndex !== -1 ? (row[firstNameIndex] || '') : '',
           lastName: lastNameIndex !== -1 ? (row[lastNameIndex] || '') : '',
           studentId: studentIdIndex !== -1 ? (row[studentIdIndex] || '') : '',
           center: studentCenter.trim(),
           lastAttendance: lastAttendanceIndex !== -1 ? (row[lastAttendanceIndex] || '') : '',
           qrCode: qrCodeIndex !== -1 ? (row[qrCodeIndex] || '') : ''
-        })
+        }
+        
+        students.push(studentRecord)
       }
     }
 

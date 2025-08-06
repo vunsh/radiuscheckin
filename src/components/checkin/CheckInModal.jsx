@@ -21,7 +21,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
   const eventSourceRef = useRef(null)
   const hasStartedRef = useRef(false)
 
-  const missingQRCode = !student?.qrCode || student.qrCode.trim() === ""
+  const missingQRCode = !student?.studentId || student?.studentId.trim() === ""
 
   useEffect(() => {
     if (!open || !student) return
@@ -33,7 +33,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
   }, [open, student])
 
   useEffect(() => {
-    if (!open) {
+    if (!open || !student) {
       setCheckInState("idle")
       setProgress(0)
       setStatusMessage("")
@@ -45,38 +45,41 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
         eventSourceRef.current.close()
         eventSourceRef.current = null
       }
+      return
     }
-  }, [open])
-
-  useEffect(() => {
-    const fetchQRImage = async () => {
-      if (open && student?.qrCode && !missingQRCode) {
+    
+    if (missingQRCode) {
+      setError("No QR code found for this student.")
+      setQrCodeImage("")
+      setLoadingQRImage(false)
+      setCheckInState("idle") 
+    } else {
+      const fetchQRImage = async () => {
         setLoadingQRImage(true)
+        setError("") 
+        setCheckInState("idle") 
+        
         try {
-          const imageData = await checkInAPI.fetchQRCodeImage(student.qrCode)
-          setQrCodeImage(imageData)
+          const imageData = await checkInAPI.fetchQRCodeImage(undefined, student?.studentId)
+          if (imageData && imageData.length > 50) { 
+            setQrCodeImage(imageData)
+            setError("")
+          } else {
+            setError("No QR code found for this student.")
+            setQrCodeImage("")
+          }
         } catch (error) {
-          console.error("Failed to fetch QR code image:", error)
-          setQrCodeImage(student.qrCode)
+          console.log("QR fetch failed:", error.message)
+          setError("No QR code found for this student.")
+          setQrCodeImage("")
         } finally {
           setLoadingQRImage(false)
         }
       }
+      
+      fetchQRImage()
     }
-
-    fetchQRImage()
-  }, [open, student?.qrCode, missingQRCode])
-
-  if (!open || !student) return null
-
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }
+  }, [open, student, missingQRCode])
 
   const formatTime = (date) => {
     return date.toLocaleTimeString('en-US', {
@@ -84,6 +87,15 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
       minute: '2-digit',
       second: '2-digit',
       hour12: true
+    })
+  }
+
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     })
   }
 
@@ -97,7 +109,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
       setStatusMessage("Initializing check-in process...")
       setError("")
 
-      const jobId = await checkInAPI.startCheckIn(student.studentId, student.qrCode)
+      const jobId = await checkInAPI.startCheckIn(student?.studentId, null)
 
       setProgress(10)
       setStatusMessage("Starting check-in process...")
@@ -107,7 +119,10 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
         (data) => {
           const newProgress = data.progress || 50
           setProgress(newProgress)
-          setStatusMessage(data.message || "Processing check-in...")
+          
+          const message = data.message || data.status || "Processing check-in..."
+          setStatusMessage(message)
+          
           if (data.qrCode) {
             checkInAPI.fetchQRCodeImage(data.qrCode)
               .then(imageData => setQrCodeImage(imageData))
@@ -127,7 +142,11 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
         (data) => {
           setCheckInState("completed")
           setProgress(100)
-          setStatusMessage("Check-in completed successfully!")
+          
+          // Use data.message for completion message
+          const completionMessage = data.message || "Check-in completed successfully!"
+          setStatusMessage(completionMessage)
+          
           if (data.qrCode) {
             checkInAPI.fetchQRCodeImage(data.qrCode)
               .then(imageData => setQrCodeImage(imageData))
@@ -137,8 +156,8 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
             eventSourceRef.current.close()
             eventSourceRef.current = null
           }
-          toast.success(`${student.firstName} ${student.lastName} Checked In!`, {
-            description: "Check-in completed successfully"
+          toast.success(`${student?.firstName || ''} ${student?.lastName || ''} Checked In!`, {
+            description: completionMessage
           })
         }
       )
@@ -163,7 +182,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
 
   const isProcessing = checkInState === "processing"
   const isCompleted = checkInState === "completed"
-  const hasError = checkInState === "error"
+  const hasError = checkInState === "error" || missingQRCode || !!error
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -195,7 +214,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
               </DialogTitle>
               <DialogDescription className="text-sm md:text-base font-medium text-muted-foreground">
                 {isCompleted
-                  ? `${student.firstName} ${student.lastName} has been successfully checked in`
+                  ? `${student?.firstName || ''} ${student?.lastName || ''} has been successfully checked in`
                   : isProcessing
                     ? statusMessage
                     : "Please confirm you want to check in this student"}
@@ -207,9 +226,9 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
             <div className="space-y-6 px-4 sm:px-6 pb-6 pt-2">
               <div className="flex flex-col items-center gap-2">
                 <h3 className="text-lg md:text-xl font-bold text-primary tracking-tight">
-                  {student.firstName} {student.lastName}
+                  {student?.firstName || ''} {student?.lastName || ''}
                 </h3>
-                {student.lastAttendance && (
+                {student?.lastAttendance && (
                   <div className="text-xs md:text-sm text-muted-foreground font-medium">
                     <span className="font-bold">Last Attendance:</span> {student.lastAttendance}
                   </div>
@@ -242,7 +261,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
                 </div>
               )}
 
-              {(qrCodeImage || (!missingQRCode && student.qrCode)) && (isCompleted || isProcessing) && (
+              {(qrCodeImage || (!missingQRCode && student?.qrCode)) && (isCompleted || isProcessing) && !missingQRCode && (
                 <div className="flex flex-col items-center gap-2 bg-muted rounded-xl p-4 shadow-inner">
                   <div className="font-semibold text-sm md:text-base mb-1">Session QR Code</div>
                   <div className="flex justify-center">
@@ -258,7 +277,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
                       >
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                       </div>
-                    ) : qrCodeImage ? (
+                    ) : qrCodeImage && qrCodeImage.length > 50 ? (
                       <img
                         src={qrCodeImage}
                         alt="Session QR Code"
@@ -269,6 +288,13 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
                           md:w-[350px] md:h-[350px] md:max-w-[350px] md:max-h-[350px]
                         "
                         style={{ objectFit: 'contain' }}
+                        onError={(e) => {
+                          console.error("[CheckInModal] Image failed to load:", e)
+                          console.error("[CheckInModal] Image src:", qrCodeImage.substring(0, 100))
+                        }}
+                        onLoad={() => {
+                          console.log("[CheckInModal] Image loaded successfully")
+                        }}
                       />
                     ) : (
                       <div className="
@@ -276,9 +302,14 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
                         w-[70vw] h-[70vw] max-w-[220px] max-h-[220px]
                         sm:w-[320px] sm:h-[320px] sm:max-w-[320px] sm:max-h-[320px]
                         md:w-[350px] md:h-[350px] md:max-w-[350px] md:max-h-[350px]
-                        bg-red-50 rounded-md
+                        bg-amber-50 rounded-md border border-amber-200
                       ">
-                        <span className="text-sm text-red-600">Failed to load QR code</span>
+                        <div className="text-center p-4">
+                          <span className="text-sm text-amber-700">QR code will appear after processing</span>
+                          <div className="text-xs text-amber-600 mt-1">
+                            Student ID: {student?.studentId || 'N/A'}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -286,30 +317,28 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
                 </div>
               )}
 
-              {missingQRCode && !isProcessing && !isCompleted && (
+              {(missingQRCode || error) && !isProcessing && !isCompleted && (
                 <div className="flex flex-col items-center justify-center gap-2 bg-red-50 border border-red-200 rounded-lg p-4 mt-2 max-w-xs md:max-w-md mx-auto">
                   <AlertCircle className="size-6 md:size-7 text-red-500" />
                   <div className="text-sm md:text-base font-bold text-red-700">
-                    No QR Code Linked
+                    Cannot Check In
                   </div>
                   <div className="text-xs md:text-sm text-red-700 text-center">
-                    This student does not have a QR code linked.<br />
-                    Please ask the center director for help.
+                    {(!student?.studentId || student?.studentId.trim() === "") ? (
+                      <>
+                        This student does not have a valid student ID.<br />
+                        Please contact the center director for help.
+                      </>
+                    ) : (
+                      <>
+                        This student does not have a QR code on file and cannot check in.<br />
+                        Please show this message to a center director for assistance.
+                      </>
+                    )}
                   </div>
                 </div>
               )}
 
-              {hasError && (
-                <div className="flex flex-col items-center justify-center gap-2 bg-red-50 border border-red-200 rounded-lg p-4 mt-2">
-                  <AlertCircle className="size-6 md:size-7 text-red-500" />
-                  <div className="text-sm md:text-base font-bold text-red-700">
-                    Check-in Failed
-                  </div>
-                  <div className="text-xs md:text-sm text-red-700 text-center">
-                    {error}
-                  </div>
-                </div>
-              )}
             </div>
 
             <Separator className="mb-0" />
@@ -320,7 +349,7 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
                   onClick={handleConfirmCheckIn}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white h-16 md:h-20 min-h-[56px] text-base md:text-lg font-bold rounded-md shadow"
                   size="lg"
-                  disabled={missingQRCode}
+                  disabled={missingQRCode || !!error}
                 >
                   <UserCheck className="size-5 md:size-6 mr-2" />
                   Check In

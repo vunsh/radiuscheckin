@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import "@ungap/with-resolvers";
 
 class GoogleSheetsClient {
   constructor() {
@@ -9,7 +10,7 @@ class GoogleSheetsClient {
       },
       scopes: [
         'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive.readonly'
+        'https://www.googleapis.com/auth/drive'  // Changed from drive.readonly to full drive access
       ],
     });
 
@@ -117,32 +118,168 @@ class GoogleSheetsClient {
         throw new Error('Invalid Google Drive file URL');
       }
 
-      const metadata = await this.drive.files.get({
+      // First check if we can access the file
+      try {
+        const metadata = await this.drive.files.get({
+          fileId,
+          fields: 'mimeType,name,size'
+        });
+
+        const mimeType = metadata.data.mimeType;
+        
+        // Check if it's an image
+        if (!mimeType || !mimeType.startsWith('image/')) {
+          throw new Error(`File is not an image. MimeType: ${mimeType}`);
+        }
+
+      } catch (metadataError) {
+        // Don't fail on metadata errors, try to download anyway
+      }
+
+      // Try direct download first
+      try {
+        const response = await this.drive.files.get({
+          fileId,
+          alt: 'media'
+        }, {
+          responseType: 'arraybuffer'
+        });
+
+        if (response.data && response.data.byteLength > 0) {
+          const buffer = Buffer.from(response.data);
+          const responseMimeType = response.headers['content-type'] || metadata.data.mimeType;
+          
+          // It's an image, return as base64
+          const base64String = buffer.toString('base64');
+          const dataUrl = `data:${responseMimeType};base64,${base64String}`;
+          
+          return dataUrl;
+        }
+      } catch (directError) {
+        // Try export method
+      }
+
+      // Try export method as fallback
+      try {
+        const exportResponse = await this.drive.files.export({
+          fileId,
+          mimeType: 'image/png'
+        }, {
+          responseType: 'arraybuffer'
+        });
+
+        if (exportResponse.data && exportResponse.data.byteLength > 0) {
+          const buffer = Buffer.from(exportResponse.data);
+          const base64String = buffer.toString('base64');
+          const dataUrl = `data:image/png;base64,${base64String}`;
+          
+          return dataUrl;
+        }
+      } catch (exportError) {
+        // Try stream method
+      }
+
+      // Try stream method as final fallback
+      try {
+        const streamResponse = await this.drive.files.get({
+          fileId,
+          alt: 'media'
+        }, {
+          responseType: 'stream'
+        });
+
+        // Convert stream to buffer
+        const chunks = [];
+        for await (const chunk of streamResponse.data) {
+          chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
+        
+        if (buffer.length > 0) {
+          const streamMimeType = streamResponse.headers['content-type'] || metadata.data.mimeType;
+          
+          // It's an image, return as base64
+          const base64String = buffer.toString('base64');
+          const dataUrl = `data:${streamMimeType};base64,${base64String}`;
+          
+          return dataUrl;
+        }
+      } catch (streamError) {
+        // Stream method failed
+      }
+
+      throw new Error('All download methods failed - unable to retrieve file content. The file may be corrupted or inaccessible.');
+
+    } catch (error) {
+      console.error('Error fetching image from Google Drive:', error);
+      
+      // Provide more specific error messages
+      if (error.code === 403) {
+        throw new Error('Service account does not have permission to access this file. Please ensure the file is shared with the service account.');
+      } else if (error.code === 404) {
+        throw new Error('File not found. The Google Drive file may have been deleted or moved.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('Request timed out while downloading file from Google Drive.');
+      }
+      
+      throw error;
+    }
+  }
+
+  // Keep the user token method for admin operations
+  async getImageAsBase64WithUserToken(fileUrl, accessToken) {
+    try {
+      const fileId = this.extractGoogleDriveFileId(fileUrl);
+      if (!fileId) {
+        throw new Error('Invalid Google Drive file URL');
+      }
+
+      // Create user-authenticated drive client
+      const userAuth = new google.auth.OAuth2();
+      userAuth.setCredentials({ access_token: accessToken });
+      const userDrive = google.drive({ version: 'v3', auth: userAuth });
+
+      const metadata = await userDrive.files.get({
         fileId,
         fields: 'mimeType,name'
       });
 
       const mimeType = metadata.data.mimeType;
+      
+      // Check if it's an image
       if (!mimeType || !mimeType.startsWith('image/')) {
-        throw new Error('File is not an image');
+        throw new Error(`File is not an image. MimeType: ${mimeType}`);
       }
 
-      const response = await this.drive.files.get({
+      const response = await userDrive.files.get({
         fileId,
         alt: 'media'
       }, {
         responseType: 'arraybuffer'
       });
 
+      if (!response.data || response.data.byteLength === 0) {
+        throw new Error('No file data received from Google Drive');
+      }
+
       const buffer = Buffer.from(response.data);
+      
+      // It's an image, return as base64
       const base64String = buffer.toString('base64');
       
-      return `data:${mimeType};base64,${base64String}`;
+      if (base64String.length === 0) {
+        throw new Error('Failed to convert image to base64');
+      }
+      
+      const dataUrl = `data:${mimeType};base64,${base64String}`;
+      
+      return dataUrl;
     } catch (error) {
-      console.error('Error fetching image from Google Drive:', error);
+      console.error('Error fetching image from Google Drive with user token:', error);
       throw error;
     }
   }
+
 }
 
 export const sheetsClient = new GoogleSheetsClient();
@@ -319,3 +456,93 @@ export const getStudentsByCenter = async (centerName) => {
     throw error;
   }
 };
+
+export const findStudentIdByName = async (studentName) => {
+  try {
+    const studentData = await getStudentData()
+    if (!studentData || studentData.length === 0) {
+      return null
+    }
+
+    const headers = studentData[0] || []
+    const firstNameIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "first name")
+    const lastNameIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "last name")
+    const studentIdIndex = headers.findIndex(h => h && h.toLowerCase().trim() === "student id")
+
+    if (firstNameIndex === -1 || lastNameIndex === -1 || studentIdIndex === -1) {
+      throw new Error('Required columns not found in student data')
+    }
+
+    for (let i = 1; i < studentData.length; i++) {
+      const row = studentData[i]
+      if (!row) continue
+      
+      const firstName = row[firstNameIndex] || ''
+      const lastName = row[lastNameIndex] || ''
+      const fullName = `${firstName} ${lastName}`.trim()
+      
+      if (fullName.toLowerCase() === studentName.toLowerCase()) {
+        return {
+          studentId: row[studentIdIndex],
+          fullName,
+          rowIndex: i
+        }
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Error finding student ID by name:', error)
+    throw error
+  }
+}
+
+export const updateQRCodeForStudent = async (studentId, qrCodeUrl) => {
+  try {
+    const qrCodeData = await getQRCodes()
+    let updatedData = [...qrCodeData]
+    
+    // Find existing entry
+    let existingIndex = -1
+    for (let i = 0; i < qrCodeData.length; i++) {
+      if (qrCodeData[i][0] === studentId) {
+        existingIndex = i
+        break
+      }
+    }
+
+    if (existingIndex !== -1) {
+      // Update existing
+      updatedData[existingIndex][1] = qrCodeUrl
+    } else {
+      // Add new
+      updatedData.push([studentId, qrCodeUrl])
+    }
+
+    await updateQRCodes(updatedData)
+    return {
+      success: true,
+      action: existingIndex !== -1 ? 'updated' : 'added',
+      studentId,
+      qrCodeUrl
+    }
+  } catch (error) {
+    console.error('Error updating QR code for student:', error)
+    throw error
+  }
+}
+
+export const getQRCodeByStudentId = async (studentId) => {
+  try {
+    const qrCodeData = await getQRCodes()
+    const entry = qrCodeData.find(row => row[0] === studentId)
+    return entry ? {
+      studentId: entry[0],
+      qrCodeUrl: entry[1]
+    } : null
+  } catch (error) {
+    console.error('Error getting QR code by student ID:', error)
+    throw error
+  }
+}
+

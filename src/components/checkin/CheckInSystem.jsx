@@ -65,9 +65,12 @@ export function CheckInSystem() {
       if (!response.ok) throw new Error('Failed to fetch students')
       
       const data = await response.json()
-      const sorted = (data.students || []).slice().sort((a, b) =>
-        (a.firstName || "").localeCompare(b.firstName || "")
-      )
+      const sorted = (data.students || [])
+        .filter(student => student && typeof student === 'object')
+        .slice()
+        .sort((a, b) =>
+          (a?.firstName || "").localeCompare(b?.firstName || "")
+        )
       setStudents(sorted)
     } catch (err) {
       setError(err.message)
@@ -84,7 +87,8 @@ export function CheckInSystem() {
     }
 
     const filtered = students.filter(student => {
-      const fullName = `${student.firstName} ${student.lastName}`.toLowerCase()
+      if (!student || typeof student !== 'object') return false
+      const fullName = `${student?.firstName || ''} ${student?.lastName || ''}`.toLowerCase()
       return fullName.includes(searchTerm.toLowerCase())
     })
     setFilteredStudents(filtered)
@@ -399,16 +403,18 @@ export function CheckInSystem() {
                             >
                               <div className="flex-1 min-w-0">
                                 <h3 className="font-bold text-xl tracking-tight text-primary">
-                                  {student.firstName} {student.lastName}
+                                  {`${student?.firstName || ''} ${student?.lastName || ''}`.trim() || 'Unknown Student'}
                                 </h3>
-                                <div className="text-sm font-medium text-muted-foreground">
-                                  Last Attendance: {student.lastAttendance || <span className="italic">Never</span>}
+                                <div className="text-sm font-medium text-muted-foreground space-y-1">
+                                  <div>ID: {student?.studentId || 'No ID'}</div>
+                                  <div>Last Attendance: {student?.lastAttendance || <span className="italic">Never</span>}</div>
                                 </div>
                               </div>
                               <Button
                                 onClick={() => handleCheckIn(student)}
                                 className="shrink-0 w-32 h-10 text-lg font-bold rounded-md"
                                 size="sm"
+                                disabled={!student?.studentId || student?.studentId.trim() === ""}
                               >
                                 <UserCheck className="size-4 mr-2" />
                                 Check In

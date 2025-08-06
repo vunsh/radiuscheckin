@@ -5,15 +5,20 @@ export async function POST(request) {
   try {
     const { qrCodeUrl, studentId } = await request.json()
     
+    console.log("[PDF-Convert API] Request received:", { qrCodeUrl: qrCodeUrl ? "provided" : "none", studentId })
+    
     let fileUrl = qrCodeUrl;
     
-    // If studentId is provided, look up QR code from QR Codes sheet
     if (studentId && !qrCodeUrl) {
+      console.log("[PDF-Convert API] Looking up QR code for student ID:", studentId)
       const qrCodeData = await getQRCodes()
+      console.log("[PDF-Convert API] QR Codes data length:", qrCodeData.length)
       
       const studentQREntry = qrCodeData.find(row => row[0] === studentId)
+      console.log("[PDF-Convert API] Found QR entry:", studentQREntry)
       
       if (!studentQREntry || !studentQREntry[1]) {
+        console.log("[PDF-Convert API] No QR code found for student ID:", studentId)
         return NextResponse.json(
           { error: "No QR code found for this student ID" },
           { status: 404 }
@@ -30,7 +35,8 @@ export async function POST(request) {
       )
     }
 
-    // Get file metadata first
+    console.log("[PDF-Convert API] Getting file info for URL:", fileUrl)
+    
     const fileId = sheetsClient.extractGoogleDriveFileId(fileUrl);
     if (!fileId) {
       return NextResponse.json(
@@ -47,9 +53,10 @@ export async function POST(request) {
       });
 
       const mimeType = metadata.data.mimeType;
+      console.log("[PDF-Convert API] File type:", mimeType)
       
-      // If it's already an image, return the direct image data
       if (mimeType && mimeType.startsWith('image/')) {
+        console.log("[PDF-Convert API] File is already an image, returning image data")
         const imageData = await sheetsClient.getImageAsBase64(fileUrl)
         return NextResponse.json({
           imageData,
@@ -58,11 +65,26 @@ export async function POST(request) {
         })
       }
       
-      // If it's a PDF, indicate that client-side conversion is needed
       if (mimeType === 'application/pdf') {
+        console.log("[PDF-Convert API] File is PDF, returning PDF data for client conversion")
+        
+        const response = await sheetsClient.drive.files.get({
+          fileId,
+          alt: 'media'
+        }, {
+          responseType: 'arraybuffer'
+        });
+
+        if (!response.data || response.data.byteLength === 0) {
+          throw new Error('No PDF data received from Google Drive');
+        }
+
+        const buffer = Buffer.from(response.data);
+        const base64String = buffer.toString('base64');
+        
         return NextResponse.json({
+          pdfData: base64String,
           isPdf: true,
-          requiresConversion: true,
           success: true,
           qrCodeUrl: fileUrl
         })
@@ -74,16 +96,16 @@ export async function POST(request) {
       )
       
     } catch (error) {
-      console.error("[QR-Image API] Error processing file:", error)
+      console.error("[PDF-Convert API] Error processing file:", error)
       return NextResponse.json(
         { error: "Failed to process file", details: error.message },
         { status: 500 }
       )
     }
   } catch (error) {
-    console.error("Error in QR-Image API:", error)
+    console.error("Error in PDF-Convert API:", error)
     return NextResponse.json(
-      { error: "Failed to get QR image", details: error.message },
+      { error: "Failed to convert PDF", details: error.message },
       { status: 500 }
     )
   }

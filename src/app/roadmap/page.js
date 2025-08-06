@@ -3,11 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SignInButton } from "@/components/auth/SignInButton";
+import { useSession } from "next-auth/react";
 import { Construction, QrCode, Users, Calendar, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function RoadmapPage() {
+  const { data: session, status } = useSession();
   const features = [
     { name: "QR Code Pulling", status: "in-progress", progress: 60 },
     { name: "Student Database Integration", status: "in-progress", progress: 75 },
@@ -38,7 +40,15 @@ export default function RoadmapPage() {
                 Home
               </Button>
             </Link>
-            <SignInButton />
+            {session ? (
+              <Link href="/administrator">
+                <Button variant="default" size="lg" className="w-full sm:w-auto text-base py-3 rounded-lg">
+                  Administrator
+                </Button>
+              </Link>
+            ) : (
+              <SignInButton />
+            )}
           </div>
         </div>
       </header>
