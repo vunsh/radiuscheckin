@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 class R2Client {
   constructor() {
@@ -29,6 +30,24 @@ class R2Client {
       return { success: true, fileId }
     } catch (error) {
       console.error('R2 upload error:', error)
+      throw error
+    }
+  }
+
+  async presignPut(fileId, contentType = 'application/pdf', expiresInSeconds = 900) {
+    try {
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: fileId,
+        ContentType: contentType,
+        Metadata: {
+          uploadedAt: new Date().toISOString()
+        }
+      })
+      const url = await getSignedUrl(this.client, command, { expiresIn: expiresInSeconds })
+      return { url, fileId }
+    } catch (error) {
+      console.error('R2 presign error:', error)
       throw error
     }
   }

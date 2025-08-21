@@ -79,26 +79,45 @@ export function MassQRUploadTab({ onBack }) {
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
       const generatedFileId = `mass_qr_${timestamp}_${sanitizedName}`
 
-      // Upload file
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('fileId', generatedFileId)
-
-      const uploadResponse = await fetch('/api/admin/r2/upload', {
+      // Ask server for a presigned PUT URL
+      const presignRes = await fetch('/api/admin/r2/presign', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: generatedFileId, contentType: file.type })
       })
-
-      if (!uploadResponse.ok) {
-        const error = await uploadResponse.json()
-        throw new Error(error.error || 'Upload failed')
+      if (!presignRes.ok) {
+        const err = await presignRes.json()
+        throw new Error(err.error || 'Failed to get upload URL')
       }
 
-      const result = await uploadResponse.json()
-      setFileId(result.fileId)
+      const { url } = await presignRes.json()
+
+      // Upload directly to R2 via XHR to track progress
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', url)
+        xhr.setRequestHeader('Content-Type', file.type)
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const pct = Math.round((event.loaded / event.total) * 100)
+            setProgress(pct)
+          }
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve()
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`))
+          }
+        }
+        xhr.onerror = () => reject(new Error('Network error during upload'))
+        xhr.send(file)
+      })
+
+      setFileId(generatedFileId)
       setUploaded(true)
       setProgress(100)
-      toast.success("File uploaded successfully to R2 storage")
+      toast.success('File uploaded successfully to R2 storage')
 
     } catch (error) {
       console.error('Upload error:', error)

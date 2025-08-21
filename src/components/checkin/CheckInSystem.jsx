@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
@@ -88,8 +88,16 @@ export function CheckInSystem() {
 
     const filtered = students.filter(student => {
       if (!student || typeof student !== 'object') return false
-      const fullName = `${student?.firstName || ''} ${student?.lastName || ''}`.toLowerCase()
-      return fullName.includes(searchTerm.toLowerCase())
+      const first = (student?.firstName || '').toLowerCase()
+      const last = (student?.lastName || '').toLowerCase()
+      const fullName = `${first} ${last}`.trim()
+      const term = searchTerm.trim().toLowerCase()
+      // If the user clicked an alphabet letter (single A-Z), match first OR last name that STARTS with that letter
+      if (term.length === 1 && term >= 'a' && term <= 'z') {
+        return first.startsWith(term) || last.startsWith(term)
+      }
+      // For typed searches (multi-character), keep the broader contains behavior across full name
+      return fullName.includes(term)
     })
     setFilteredStudents(filtered)
   }
@@ -126,6 +134,26 @@ export function CheckInSystem() {
   }
 
   const hasActiveFilters = searchTerm.trim() !== ""
+  const isLetterFilter = (() => {
+    const term = searchTerm.trim()
+    return term.length === 1 && /[a-z]/i.test(term)
+  })()
+
+  const letterHasMatches = useMemo(() => {
+    const map = Object.fromEntries(
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((l) => [l, false])
+    )
+    for (const s of students) {
+      if (!s || typeof s !== "object") continue
+      const first = (s?.firstName || "").trim().toUpperCase()
+      const last = (s?.lastName || "").trim().toUpperCase()
+      const f0 = first[0]
+      const l0 = last[0]
+      if (f0 && /[A-Z]/.test(f0)) map[f0] = true
+      if (l0 && /[A-Z]/.test(l0)) map[l0] = true
+    }
+    return map
+  }, [students])
 
   if (currentStep === "center") {
     return (
@@ -321,7 +349,14 @@ export function CheckInSystem() {
                     <AlertDescription className="text-amber-800 dark:text-amber-200">
                       <div className="flex items-center justify-between">
                         <span>
-                          <strong>Filter Active:</strong> Showing results for "{searchTerm}"
+                          <strong>Filter Active:</strong>{" "}
+                          {isLetterFilter ? (
+                            <>
+                              Letter “{searchTerm.toUpperCase()}” (starts with)
+                            </>
+                          ) : (
+                            <>Search for “{searchTerm}”</>
+                          )}
                         </span>
                         <Button
                           variant="ghost"
@@ -358,17 +393,28 @@ export function CheckInSystem() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 justify-center p-4 bg-muted rounded-md">
-                  {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => (
-                    <Button
-                      key={letter}
-                      variant="ghost"
-                      size="lg"
-                      className="h-12 w-12 min-w-[3rem] min-h-[3rem] text-xl font-bold rounded-full flex items-center justify-center"
-                      onClick={() => setSearchTerm(letter)}
-                    >
-                      {letter}
-                    </Button>
-                  ))}
+                  {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => {
+                    const disabled = !letterHasMatches[letter]
+                    const active = !disabled && isLetterFilter && searchTerm.trim().toUpperCase() === letter
+                    return (
+                      <Button
+                        key={letter}
+                        variant={active ? "default" : "ghost"}
+                        size="lg"
+                        aria-pressed={active}
+                        disabled={disabled}
+                        title={disabled ? `No students starting with ${letter}` : undefined}
+                        className={`h-12 w-12 min-w-[3rem] min-h-[3rem] text-xl font-bold rounded-full flex items-center justify-center ${active ? "ring-2 ring-primary" : ""} ${disabled ? "opacity-30 cursor-not-allowed" : ""}`}
+                        onClick={() => {
+                          if (disabled) return
+                          const current = searchTerm.trim().toUpperCase()
+                          setSearchTerm(current === letter ? "" : letter)
+                        }}
+                      >
+                        {letter}
+                      </Button>
+                    )
+                  })}
                   <Button
                     variant="ghost"
                     size="lg"
