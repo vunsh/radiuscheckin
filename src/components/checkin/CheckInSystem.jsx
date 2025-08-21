@@ -92,9 +92,9 @@ export function CheckInSystem() {
       const last = (student?.lastName || '').toLowerCase()
       const fullName = `${first} ${last}`.trim()
       const term = searchTerm.trim().toLowerCase()
-      // If the user clicked an alphabet letter (single A-Z), match first OR last name that STARTS with that letter
+      // If the user clicked an alphabet letter (single A-Z), match FIRST NAME that STARTS with that letter
       if (term.length === 1 && term >= 'a' && term <= 'z') {
-        return first.startsWith(term) || last.startsWith(term)
+        return first.startsWith(term)
       }
       // For typed searches (multi-character), keep the broader contains behavior across full name
       return fullName.includes(term)
@@ -146,11 +146,8 @@ export function CheckInSystem() {
     for (const s of students) {
       if (!s || typeof s !== "object") continue
       const first = (s?.firstName || "").trim().toUpperCase()
-      const last = (s?.lastName || "").trim().toUpperCase()
       const f0 = first[0]
-      const l0 = last[0]
       if (f0 && /[A-Z]/.test(f0)) map[f0] = true
-      if (l0 && /[A-Z]/.test(l0)) map[l0] = true
     }
     return map
   }, [students])
@@ -394,7 +391,7 @@ export function CheckInSystem() {
 
                 <div className="flex flex-wrap gap-2 justify-center p-4 bg-muted rounded-md">
                   {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => {
-                    const disabled = !letterHasMatches[letter]
+          const disabled = !letterHasMatches[letter]
                     const active = !disabled && isLetterFilter && searchTerm.trim().toUpperCase() === letter
                     return (
                       <Button
@@ -403,7 +400,7 @@ export function CheckInSystem() {
                         size="lg"
                         aria-pressed={active}
                         disabled={disabled}
-                        title={disabled ? `No students starting with ${letter}` : undefined}
+            title={disabled ? `No first names starting with ${letter}` : undefined}
                         className={`h-12 w-12 min-w-[3rem] min-h-[3rem] text-xl font-bold rounded-full flex items-center justify-center ${active ? "ring-2 ring-primary" : ""} ${disabled ? "opacity-30 cursor-not-allowed" : ""}`}
                         onClick={() => {
                           if (disabled) return
