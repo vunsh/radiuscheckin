@@ -1,0 +1,27 @@
+{
+    "CA": {
+        "centers": ["4S Ranch", "La Jolla", "La Costa"],
+        "url": "https://docs.google.com/spreadsheets/d/1XDl_zPE_kDC81OVPPeM-HopflTaqfr50ZcdyiGUlGCY",
+        "timezone": "PST"
+    },
+    "CO": {
+        "centers": ["Highlands", "South Westminster", "Littleton", "Lakewood CO"],
+        "url": "https://docs.google.com/spreadsheets/d/1EbRqUSW89ErOBbKlVNKl6W3i8-82TVS_VkD5fgvBvqw",
+        "timezone": "MST"
+    },
+    "AZ": {
+        "centers": ["Queen Creek", "Litchfield Park"],
+        "url": "https://docs.google.com/spreadsheets/d/1eggHZLG7Ld8kKXpiSBpK8kfZcTzMnu-8kenSB6kxMT4/",
+        "timezone": "MST"
+    },
+    "TX": {
+        "centers": ["Allen", "Frisco East", "Richardson West", "Castle Hills", "Legacy West"],
+        "url": "https://docs.google.com/spreadsheets/d/1yw7eOeZ5BfjKeQ_tfV0Lv4lEzYqZWyvxBYUe8I3XQ_M",
+        "timezone": "CST"   
+    },
+    "OH": {
+        "centers": ["Blue Ash", "Mason", "West Chester", "Hyde Park"],
+        "url": "https://docs.google.com/spreadsheets/d/1HytfSGD_-UjvhlDGAWzUS3qxNWZp_8cQfhs9oQFzGhU/",
+        "timezone": "EST"
+    }
+}

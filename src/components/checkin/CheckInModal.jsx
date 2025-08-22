@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { UserCheck, Calendar, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { checkInAPI } from "@/lib/api/checkin"
+import regions from "@/lib/regions.json"
 import { toast } from "sonner"
 
 export function CheckInModal({ student, open, onClose, onConfirm }) {
@@ -109,7 +110,18 @@ export function CheckInModal({ student, open, onClose, onConfirm }) {
       setStatusMessage("Initializing check-in process...")
       setError("")
 
-      const jobId = await checkInAPI.startCheckIn(student?.studentId, null)
+      // Derive region from student's center using regions.json
+      let region = null
+      if (student?.center) {
+        for (const [regionKey, info] of Object.entries(regions)) {
+          if (info?.centers?.some(c => c.trim().toLowerCase() === student.center.trim().toLowerCase())) {
+            region = regionKey
+            break
+          }
+        }
+      }
+
+      const jobId = await checkInAPI.startCheckIn(student?.studentId, null, region)
 
       setProgress(10)
       setStatusMessage("Starting check-in process...")

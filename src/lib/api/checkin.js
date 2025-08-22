@@ -4,19 +4,22 @@ export class CheckInAPI {
     this.apiKey = process.env.NEXT_PUBLIC_API_KEY;
   }
 
-  async startCheckIn(studentId, qrCodeUrl = null) {
+  async startCheckIn(studentId, qrCodeUrl = null, region = null) {
     try {
       console.log("[CheckInAPI] Starting check-in for studentId:", studentId);
+      const payload = {
+        apiKey: this.apiKey,
+        studentId: studentId,
+        qrCodeUrl: qrCodeUrl,
+      }
+      if (region) payload.region = region
+
       const response = await fetch(`${this.baseUrl}/api/check-in/run`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          apiKey: this.apiKey,
-          studentId: studentId,
-          qrCodeUrl: qrCodeUrl
-        })
+        body: JSON.stringify(payload)
       });
 
       console.log("[CheckInAPI] Response status:", response.status);
